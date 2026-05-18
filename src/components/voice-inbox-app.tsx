@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   type ItemStatus,
   type ParseStatus,
@@ -28,6 +28,33 @@ type InboxItem = {
   notes: string;
   parse_status: ParseStatus;
   parse_error: string | null;
+};
+
+type BrowserSpeechRecognitionResultEvent = Event & {
+  results: {
+    [index: number]: {
+      [index: number]: {
+        transcript: string;
+      };
+    };
+  };
+};
+
+type BrowserSpeechRecognition = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+  onresult: ((event: BrowserSpeechRecognitionResultEvent) => void) | null;
+  start: () => void;
+};
+
+type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
+
+type SpeechWindow = Window & {
+  SpeechRecognition?: BrowserSpeechRecognitionConstructor;
+  webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
 };
 
 const sampleItems: InboxItem[] = [
@@ -89,7 +116,17 @@ function splitList(value: string): string[] {
     .filter(Boolean);
 }
 
+function MicrophoneIcon({ className }: { className: string }) {
+  return (
+    <svg aria-hidden="true" className={className} fill="currentColor" viewBox="0 0 24 24">
+      <path d="M12 14.5a4 4 0 0 0 4-4V6.75a4 4 0 0 0-8 0v3.75a4 4 0 0 0 4 4Z" />
+      <path d="M6.25 10.25a.9.9 0 0 1 1.8 0 3.95 3.95 0 0 0 7.9 0 .9.9 0 0 1 1.8 0 5.76 5.76 0 0 1-4.85 5.68v2.22h2.35a.9.9 0 1 1 0 1.8h-6.5a.9.9 0 1 1 0-1.8h2.35v-2.22a5.76 5.76 0 0 1-4.85-5.68Z" />
+    </svg>
+  );
+}
+
 export function VoiceInboxApp() {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [rawInput, setRawInput] = useState("");
   const [items, setItems] = useState<InboxItem[]>(sampleItems);
   const [activeSpace, setActiveSpace] = useState<Space | "sve">("sve");
@@ -100,6 +137,7 @@ export function VoiceInboxApp() {
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   const [newSpace, setNewSpace] = useState("");
   const [customSpaces, setCustomSpaces] = useState<Space[]>([]);
+  const [isListening, setIsListening] = useState(false);
 
   const allTags = useMemo(() => {
     return ["Sve", ...Array.from(new Set(items.flatMap((item) => item.tags)))];
@@ -241,8 +279,40 @@ export function VoiceInboxApp() {
     setNewSpace("");
   }
 
+  function handleVoiceInput() {
+    const speechWindow = window as SpeechWindow;
+    const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
+
+    if (!Recognition) {
+      textareaRef.current?.focus();
+      setNotice("Na iPhoneu dodirni polje za unos pa mikrofon na tipkovnici za diktiranje.");
+      return;
+    }
+
+    const recognition = new Recognition();
+    recognition.lang = "hr-HR";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript?.trim();
+
+      if (transcript) {
+        setRawInput((currentInput) => [currentInput, transcript].filter(Boolean).join(" "));
+      }
+    };
+    recognition.onerror = () => {
+      setIsListening(false);
+      textareaRef.current?.focus();
+      setNotice("Diktiranje nije uspjelo. Možeš koristiti mikrofon na tipkovnici.");
+    };
+    recognition.onend = () => setIsListening(false);
+
+    setIsListening(true);
+    recognition.start();
+  }
+
   return (
-    <main className="min-h-screen overflow-hidden bg-[#f3efe6] text-slate-950">
+    <main className="min-h-screen overflow-x-hidden bg-[#f3efe6] text-slate-950">
       <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-6 px-4 py-4 sm:px-6 lg:grid lg:grid-cols-[260px_1fr] lg:py-8">
         <aside className="hidden rounded-[2rem] border border-white/60 bg-[#07131f] p-5 text-white shadow-2xl shadow-slate-900/20 lg:flex lg:flex-col">
           <div className="mb-10">
@@ -281,7 +351,7 @@ export function VoiceInboxApp() {
         </aside>
 
         <section className="flex min-w-0 flex-col gap-5">
-          <header className="rounded-[2rem] border border-white/80 bg-white/70 p-5 shadow-xl shadow-slate-900/5 backdrop-blur">
+          <header className="min-w-0 rounded-[2rem] border border-white/80 bg-white/70 p-5 shadow-xl shadow-slate-900/5 backdrop-blur">
             <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div>
                 <p className="text-sm font-medium uppercase tracking-[0.3em] text-blue-700">AI inbox</p>
@@ -320,24 +390,45 @@ export function VoiceInboxApp() {
             </div>
           </header>
 
-          <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
+          <div className="grid min-w-0 gap-5 xl:grid-cols-[420px_1fr]">
             <form
               onSubmit={handleSubmit}
-              className="rounded-[2rem] border border-white/80 bg-[#fffaf0] p-5 shadow-xl shadow-slate-900/5"
+              className="min-w-0 rounded-[2rem] border border-white/80 bg-[#fffaf0] p-5 shadow-xl shadow-slate-900/5"
             >
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-sm font-semibold text-slate-500">Novi unos</p>
                   <h3 className="text-2xl font-semibold">Glasovni inbox</h3>
                 </div>
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-700 text-lg font-semibold text-white shadow-lg shadow-blue-700/30">
-                  M
-                </div>
+                <button
+                  aria-label="Pokreni glasovni unos"
+                  className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-blue-700 text-white shadow-lg shadow-blue-700/30 ring-4 ring-blue-100 transition active:scale-95"
+                  onClick={handleVoiceInput}
+                  type="button"
+                >
+                  <MicrophoneIcon className="h-8 w-8" />
+                </button>
               </div>
+
+              <button
+                className="mt-5 flex w-full flex-col items-center justify-center gap-3 rounded-3xl border border-blue-200 bg-blue-50 px-5 py-6 text-lg font-semibold text-blue-950 shadow-inner shadow-white/70 transition active:scale-[0.99]"
+                onClick={handleVoiceInput}
+                type="button"
+              >
+                <span className="flex h-20 w-20 items-center justify-center rounded-full bg-blue-700 text-white shadow-xl shadow-blue-700/25 ring-8 ring-white">
+                  <MicrophoneIcon className="h-10 w-10" />
+                </span>
+                <span>{isListening ? "Slušam..." : "Dodirni mikrofon i govori"}</span>
+                <span className="text-sm font-medium text-blue-700">Hrvatski glasovni unos</span>
+              </button>
+              <p className="mt-3 text-sm leading-6 text-slate-500">
+                Ako se na iPhoneu ne pojavi dozvola za mikrofon, dodirni polje ispod i koristi mikrofon na tipkovnici.
+              </p>
 
               <label className="mt-6 block">
                 <span className="sr-only">Croatian voice note</span>
                 <textarea
+                  ref={textareaRef}
                   className="min-h-52 w-full resize-none rounded-3xl border border-slate-200 bg-white/80 p-5 text-lg leading-8 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10"
                   placeholder="Reci ili upiši: Trebam kupiti daske za vrtne gredice..."
                   value={rawInput}
@@ -346,7 +437,7 @@ export function VoiceInboxApp() {
               </label>
 
               <button
-                className="mt-4 w-full rounded-2xl bg-blue-700 px-5 py-4 text-base font-semibold text-white shadow-lg shadow-blue-700/25 transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-4 w-full max-w-full rounded-2xl bg-blue-700 px-5 py-4 text-base font-semibold text-white shadow-lg shadow-blue-700/25 transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={isSaving}
                 type="submit"
               >
@@ -367,7 +458,7 @@ export function VoiceInboxApp() {
               </div>
             </form>
 
-            <div className="rounded-[2rem] border border-white/80 bg-white/70 p-4 shadow-xl shadow-slate-900/5 backdrop-blur">
+            <div className="min-w-0 rounded-[2rem] border border-white/80 bg-white/70 p-4 shadow-xl shadow-slate-900/5 backdrop-blur">
               <div className="flex flex-col gap-3 border-b border-slate-200 pb-4">
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -426,7 +517,7 @@ export function VoiceInboxApp() {
 
               <div className="mt-4 space-y-3">
                 {visibleItems.map((item) => (
-                  <article key={item.id} className="rounded-3xl border border-slate-200 bg-[#fffdf7] p-4">
+                  <article key={item.id} className="min-w-0 rounded-3xl border border-slate-200 bg-[#fffdf7] p-4">
                     <div className="flex flex-col gap-4 md:flex-row md:justify-between">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
