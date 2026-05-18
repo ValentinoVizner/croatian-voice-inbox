@@ -13,6 +13,7 @@ import {
   spaceLabel,
   statusLabels,
 } from "@/lib/items";
+import { authNoticeForError } from "@/lib/auth-error";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 type InboxItem = {
@@ -220,11 +221,17 @@ export function VoiceInboxApp() {
 
   async function handleSignIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail) {
+      setNotice(authNoticeForError(trimmedEmail));
+      return;
+    }
 
     try {
       const supabase = createSupabaseBrowserClient();
       const { error } = await supabase.auth.signInWithOtp({
-        email,
+        email: trimmedEmail,
         options: {
           emailRedirectTo: window.location.origin,
         },
@@ -233,8 +240,8 @@ export function VoiceInboxApp() {
       if (error) throw error;
 
       setNotice("Provjeri email za magic link.");
-    } catch {
-      setNotice("Prijava nije dostupna dok Supabase env varijable nisu podešene.");
+    } catch (error) {
+      setNotice(authNoticeForError(error));
     }
   }
 
@@ -378,6 +385,7 @@ export function VoiceInboxApp() {
                       className="min-w-0 rounded-xl px-3 py-2 text-slate-950"
                       onChange={(event) => setEmail(event.target.value)}
                       placeholder="email"
+                      required
                       type="email"
                       value={email}
                     />
