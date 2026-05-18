@@ -139,6 +139,7 @@ export function VoiceInboxApp() {
   const [newSpace, setNewSpace] = useState("");
   const [customSpaces, setCustomSpaces] = useState<Space[]>([]);
   const [isListening, setIsListening] = useState(false);
+  const [isCaptureOpen, setIsCaptureOpen] = useState(false);
 
   const allTags = useMemo(() => {
     return ["Sve", ...Array.from(new Set(items.flatMap((item) => item.tags)))];
@@ -210,10 +211,12 @@ export function VoiceInboxApp() {
       setItems((currentItems) => [createdItem, ...currentItems]);
       setRawInput("");
       setNotice("Spremljeno i parsirano.");
+      setIsCaptureOpen(false);
     } catch {
       setItems((currentItems) => [createLocalDraft(trimmedInput), ...currentItems]);
       setRawInput("");
       setNotice("Spremljeno lokalno za pregled. API parsiranje se dodaje u sljedećem koraku.");
+      setIsCaptureOpen(false);
     } finally {
       setIsSaving(false);
     }
@@ -318,8 +321,96 @@ export function VoiceInboxApp() {
     recognition.start();
   }
 
+  function captureForm(variant: "inline" | "modal") {
+    const isModal = variant === "modal";
+
+    return (
+      <form
+        onSubmit={handleSubmit}
+        className={
+          isModal
+            ? "max-h-[calc(100vh-5rem)] min-w-0 overflow-y-auto rounded-t-[2rem] border border-white/80 bg-[#fffaf0] p-5 shadow-2xl shadow-slate-950/30"
+            : "hidden min-w-0 rounded-[2rem] border border-white/80 bg-[#fffaf0] p-5 shadow-xl shadow-slate-900/5 xl:block"
+        }
+      >
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-slate-500">Novi unos</p>
+            <h3 className="text-2xl font-semibold">Glasovni inbox</h3>
+          </div>
+          <div className="flex items-center gap-2">
+            {isModal ? (
+              <button
+                className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm"
+                onClick={() => setIsCaptureOpen(false)}
+                type="button"
+              >
+                Zatvori
+              </button>
+            ) : null}
+            <button
+              aria-label="Pokreni glasovni unos"
+              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-blue-700 text-white shadow-lg shadow-blue-700/30 ring-4 ring-blue-100 transition active:scale-95"
+              onClick={handleVoiceInput}
+              type="button"
+            >
+              <MicrophoneIcon className="h-8 w-8" />
+            </button>
+          </div>
+        </div>
+
+        <button
+          className="mt-5 flex w-full flex-col items-center justify-center gap-3 rounded-3xl border border-blue-200 bg-blue-50 px-5 py-6 text-lg font-semibold text-blue-950 shadow-inner shadow-white/70 transition active:scale-[0.99]"
+          onClick={handleVoiceInput}
+          type="button"
+        >
+          <span className="flex h-20 w-20 items-center justify-center rounded-full bg-blue-700 text-white shadow-xl shadow-blue-700/25 ring-8 ring-white">
+            <MicrophoneIcon className="h-10 w-10" />
+          </span>
+          <span>{isListening ? "Slušam..." : "Dodirni mikrofon i govori"}</span>
+          <span className="text-sm font-medium text-blue-700">Hrvatski glasovni unos</span>
+        </button>
+        <p className="mt-3 text-sm leading-6 text-slate-500">
+          Ako se na iPhoneu ne pojavi dozvola za mikrofon, dodirni polje ispod i koristi mikrofon na tipkovnici.
+        </p>
+
+        <label className="mt-6 block">
+          <span className="sr-only">Croatian voice note</span>
+          <textarea
+            ref={textareaRef}
+            className="min-h-52 w-full resize-none rounded-3xl border border-slate-200 bg-white/80 p-5 text-lg leading-8 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10"
+            placeholder="Reci ili upiši: Trebam kupiti daske za vrtne gredice..."
+            value={rawInput}
+            onChange={(event) => setRawInput(event.target.value)}
+          />
+        </label>
+
+        <button
+          className="mt-4 w-full max-w-full rounded-2xl bg-blue-700 px-5 py-4 text-base font-semibold text-white shadow-lg shadow-blue-700/25 transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={isSaving}
+          type="submit"
+        >
+          {isSaving ? "Spremam..." : "Spremi i parsiraj"}
+        </button>
+
+        {notice ? <p className="mt-4 rounded-2xl bg-blue-50 p-3 text-sm text-blue-900">{notice}</p> : null}
+
+        <div className="mt-6">
+          <p className="text-sm font-semibold text-slate-500">Brzi tagovi</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {suggestedTags.map((tag) => (
+              <span key={tag} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm">
+                {tag}
+              </span>
+            ))}
+          </div>
+        </div>
+      </form>
+    );
+  }
+
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#f3efe6] text-slate-950">
+    <main className="min-h-screen overflow-x-hidden bg-[#f3efe6] pb-28 text-slate-950 xl:pb-0">
       <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-6 px-4 py-4 sm:px-6 lg:grid lg:grid-cols-[260px_1fr] lg:py-8">
         <aside className="hidden rounded-[2rem] border border-white/60 bg-[#07131f] p-5 text-white shadow-2xl shadow-slate-900/20 lg:flex lg:flex-col">
           <div className="mb-10">
@@ -382,7 +473,7 @@ export function VoiceInboxApp() {
                   <span>Sinkronizacija preko Supabase računa</span>
                   <div className="flex gap-2">
                     <input
-                      className="min-w-0 rounded-xl px-3 py-2 text-slate-950"
+                      className="min-w-0 rounded-xl bg-white px-3 py-2 text-slate-950 caret-blue-700 placeholder:text-slate-500"
                       onChange={(event) => setEmail(event.target.value)}
                       placeholder="email"
                       required
@@ -398,73 +489,10 @@ export function VoiceInboxApp() {
             </div>
           </header>
 
+          {notice ? <p className="rounded-2xl bg-blue-50 p-3 text-sm text-blue-900 xl:hidden">{notice}</p> : null}
+
           <div className="grid min-w-0 gap-5 xl:grid-cols-[420px_1fr]">
-            <form
-              onSubmit={handleSubmit}
-              className="min-w-0 rounded-[2rem] border border-white/80 bg-[#fffaf0] p-5 shadow-xl shadow-slate-900/5"
-            >
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-semibold text-slate-500">Novi unos</p>
-                  <h3 className="text-2xl font-semibold">Glasovni inbox</h3>
-                </div>
-                <button
-                  aria-label="Pokreni glasovni unos"
-                  className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-blue-700 text-white shadow-lg shadow-blue-700/30 ring-4 ring-blue-100 transition active:scale-95"
-                  onClick={handleVoiceInput}
-                  type="button"
-                >
-                  <MicrophoneIcon className="h-8 w-8" />
-                </button>
-              </div>
-
-              <button
-                className="mt-5 flex w-full flex-col items-center justify-center gap-3 rounded-3xl border border-blue-200 bg-blue-50 px-5 py-6 text-lg font-semibold text-blue-950 shadow-inner shadow-white/70 transition active:scale-[0.99]"
-                onClick={handleVoiceInput}
-                type="button"
-              >
-                <span className="flex h-20 w-20 items-center justify-center rounded-full bg-blue-700 text-white shadow-xl shadow-blue-700/25 ring-8 ring-white">
-                  <MicrophoneIcon className="h-10 w-10" />
-                </span>
-                <span>{isListening ? "Slušam..." : "Dodirni mikrofon i govori"}</span>
-                <span className="text-sm font-medium text-blue-700">Hrvatski glasovni unos</span>
-              </button>
-              <p className="mt-3 text-sm leading-6 text-slate-500">
-                Ako se na iPhoneu ne pojavi dozvola za mikrofon, dodirni polje ispod i koristi mikrofon na tipkovnici.
-              </p>
-
-              <label className="mt-6 block">
-                <span className="sr-only">Croatian voice note</span>
-                <textarea
-                  ref={textareaRef}
-                  className="min-h-52 w-full resize-none rounded-3xl border border-slate-200 bg-white/80 p-5 text-lg leading-8 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10"
-                  placeholder="Reci ili upiši: Trebam kupiti daske za vrtne gredice..."
-                  value={rawInput}
-                  onChange={(event) => setRawInput(event.target.value)}
-                />
-              </label>
-
-              <button
-                className="mt-4 w-full max-w-full rounded-2xl bg-blue-700 px-5 py-4 text-base font-semibold text-white shadow-lg shadow-blue-700/25 transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={isSaving}
-                type="submit"
-              >
-                {isSaving ? "Spremam..." : "Spremi i parsiraj"}
-              </button>
-
-              {notice ? <p className="mt-4 rounded-2xl bg-blue-50 p-3 text-sm text-blue-900">{notice}</p> : null}
-
-              <div className="mt-6">
-                <p className="text-sm font-semibold text-slate-500">Brzi tagovi</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {suggestedTags.map((tag) => (
-                    <span key={tag} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </form>
+            {captureForm("inline")}
 
             <div className="min-w-0 rounded-[2rem] border border-white/80 bg-white/70 p-4 shadow-xl shadow-slate-900/5 backdrop-blur">
               <div className="flex flex-col gap-3 border-b border-slate-200 pb-4">
@@ -637,6 +665,37 @@ export function VoiceInboxApp() {
           </div>
         </section>
       </div>
+
+      {!isCaptureOpen ? (
+        <button
+          aria-label="Otvori glasovni unos"
+          className="fixed right-4 z-40 flex items-center gap-3 rounded-full bg-slate-950 py-2 pl-4 pr-2 text-sm font-semibold text-white shadow-2xl shadow-slate-950/30 ring-1 ring-white/40 transition active:scale-95 xl:hidden"
+          onClick={() => setIsCaptureOpen(true)}
+          style={{ bottom: "calc(1rem + env(safe-area-inset-bottom))" }}
+          type="button"
+        >
+          <span>Novi unos</span>
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-700 shadow-lg shadow-blue-700/30">
+            <MicrophoneIcon className="h-7 w-7" />
+          </span>
+        </button>
+      ) : null}
+
+      {isCaptureOpen ? (
+        <div
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-end bg-slate-950/50 px-0 pt-16 backdrop-blur-sm xl:hidden"
+          role="dialog"
+        >
+          <button
+            aria-label="Zatvori glasovni unos"
+            className="absolute inset-0 cursor-default"
+            onClick={() => setIsCaptureOpen(false)}
+            type="button"
+          />
+          <div className="relative w-full">{captureForm("modal")}</div>
+        </div>
+      ) : null}
     </main>
   );
 }
