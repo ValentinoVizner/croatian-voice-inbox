@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import type { ItemStatus, Priority, Space } from "./items";
+import type { ItemDetail, ItemStatus, Priority, Space } from "./items";
 
 export type NormalizedParsedItem = {
   name: string;
@@ -7,8 +7,10 @@ export type NormalizedParsedItem = {
   tags: string[];
   priority: Priority;
   when_to_tackle: string;
+  due_date: string | null;
   status: ItemStatus;
   dependencies: string[];
+  details: ItemDetail[];
   notes: string;
 };
 
@@ -40,6 +42,40 @@ function arrayOfStrings(value: unknown): string[] {
     .map((item) => text(item))
     .filter(Boolean)
     .filter((item, index, array) => array.indexOf(item) === index);
+}
+
+function normalizeDetails(value: unknown): ItemDetail[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => {
+      if (typeof item === "string") {
+        return { label: "Detalj", value: item.trim() };
+      }
+
+      if (typeof item !== "object" || item === null) {
+        return null;
+      }
+
+      const record = item as Record<string, unknown>;
+      const label = text(record.label) || text(record.name) || text(record.type) || "Detalj";
+      const detailValue = text(record.value) || text(record.amount) || text(record.quantity) || text(record.text);
+
+      return detailValue ? { label, value: detailValue } : null;
+    })
+    .filter((item): item is ItemDetail => Boolean(item))
+    .filter(
+      (item, index, array) =>
+        array.findIndex((candidate) => candidate.label === item.label && candidate.value === item.value) === index
+    );
+}
+
+function normalizeDueDate(value: unknown): string | null {
+  const date = text(value);
+
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
 }
 
 function normalizeSpace(value: unknown): Space {
@@ -84,6 +120,7 @@ export function normalizeParsedItem(
   rawInput: string
 ): NormalizedParsedItem {
   const whenToTackle = text(parsedItem.whenToTackle) || text(parsedItem.when_to_tackle);
+  const dueDate = parsedItem.dueDate ?? parsedItem.due_date;
 
   return {
     name: text(parsedItem.name) || fallbackName(rawInput),
@@ -91,8 +128,10 @@ export function normalizeParsedItem(
     tags: arrayOfStrings(parsedItem.tags),
     priority: normalizePriority(parsedItem.priority),
     when_to_tackle: whenToTackle || "Kasnije",
+    due_date: normalizeDueDate(dueDate),
     status: normalizeStatus(parsedItem.status),
     dependencies: arrayOfStrings(parsedItem.dependencies),
+    details: normalizeDetails(parsedItem.details),
     notes: text(parsedItem.notes),
   };
 }
@@ -107,14 +146,16 @@ export function extractGeminiJson(content: string): RawParsedItem {
 
 const parserSystemPrompt = `You parse Croatian home/project voice notes into structured JSON.
 Return only valid JSON with these keys:
-name, space, tags, priority, whenToTackle, status, dependencies, notes.
+name, space, tags, priority, whenToTackle, dueDate, status, dependencies, details, notes.
 
 Preferred space labels: Inbox, Ideje, Projekti, Kupovina, Za odlučiti, Za napraviti.
 If none fit, return a short custom Croatian space label.
 Allowed priority labels: Nisko, Srednje, Visoko, Hitno.
 Allowed status labels: Novo, U tijeku, Gotovo.
 Tags are flexible Croatian craft/work areas, for example Drvodjelstvo, Malerija, Vrtlarstvo, Keramika, Kuća.
-Dependencies should be an array of prerequisite actions or missing inputs.`;
+Dependencies should be an array of prerequisite actions or missing inputs.
+dueDate should be YYYY-MM-DD when the user gives a concrete date, otherwise null.
+details should be an array of important flexible facts as { "label": "...", "value": "..." }, especially quantities, measurements, materials, store names, dimensions, and constraints. Examples: { "label": "Količina", "value": "10 m letvica" }, { "label": "Materijal", "value": "vijci za drvo" }.`;
 
 export async function parseCroatianNote(rawInput: string): Promise<NormalizedParsedItem> {
   const apiKey = process.env.GEMINI_API_KEY;

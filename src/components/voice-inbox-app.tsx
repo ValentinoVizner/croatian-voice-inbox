@@ -24,12 +24,16 @@ type InboxItem = {
   tags: string[];
   priority: Priority;
   when_to_tackle: string;
+  due_date: string | null;
   status: ItemStatus;
   dependencies: string[];
+  details: { label: string; value: string }[];
   notes: string;
   parse_status: ParseStatus;
   parse_error: string | null;
 };
+
+type ViewMode = "lista" | "status";
 
 type BrowserSpeechRecognitionResultEvent = Event & {
   results: {
@@ -68,8 +72,13 @@ const sampleItems: InboxItem[] = [
     tags: ["Vrtlarstvo", "Drvodjelstvo"],
     priority: "visoko",
     when_to_tackle: "Ovaj tjedan",
+    due_date: null,
     status: "novo",
     dependencies: ["Izmjeriti dimenzije gredica"],
+    details: [
+      { label: "Količina", value: "10 m dasaka" },
+      { label: "Materijal", value: "vijci za drvo" },
+    ],
     notes: "Provjeriti jesu li daske impregnirane za vanjsku upotrebu.",
     parse_status: "parsed",
     parse_error: null,
@@ -83,8 +92,10 @@ const sampleItems: InboxItem[] = [
     tags: ["Keramika", "Kuća"],
     priority: "srednje",
     when_to_tackle: "Kasnije",
+    due_date: null,
     status: "novo",
     dependencies: ["Naći zamjenske pločice"],
+    details: [{ label: "Materijal", value: "zamjenske pločice" }],
     notes: "Možda fotografirati postojeće pločice prije odlaska u trgovinu.",
     parse_status: "parsed",
     parse_error: null,
@@ -92,6 +103,47 @@ const sampleItems: InboxItem[] = [
 ];
 
 const suggestedTags = ["Drvodjelstvo", "Malerija", "Vrtlarstvo", "Keramika"];
+const statusColumns: ItemStatus[] = ["novo", "u_tijeku", "gotovo"];
+
+const colorThemes = {
+  blue: { bg: "#dbeafe", text: "#1e3a8a", border: "#bfdbfe" },
+  green: { bg: "#dcfce7", text: "#14532d", border: "#bbf7d0" },
+  amber: { bg: "#fef3c7", text: "#78350f", border: "#fde68a" },
+  orange: { bg: "#ffedd5", text: "#7c2d12", border: "#fed7aa" },
+  brown: { bg: "#ede0d4", text: "#5c4033", border: "#d6c0ae" },
+  purple: { bg: "#ede9fe", text: "#4c1d95", border: "#ddd6fe" },
+  rose: { bg: "#ffe4e6", text: "#881337", border: "#fecdd3" },
+  slate: { bg: "#e2e8f0", text: "#0f172a", border: "#cbd5e1" },
+};
+
+function colorKey(value: string): keyof typeof colorThemes {
+  const token = value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (token.includes("vrt") || token.includes("bilj") || token.includes("garden")) return "green";
+  if (token.includes("kup") || token.includes("materijal")) return "green";
+  if (token.includes("drvo") || token.includes("gred") || token.includes("stolar")) return "brown";
+  if (token.includes("maler") || token.includes("boja") || token.includes("farb")) return "orange";
+  if (token.includes("odluc") || token.includes("cek")) return "purple";
+  if (token.includes("hitno") || token.includes("keram")) return "rose";
+  if (token.includes("projekt") || token.includes("idej")) return "blue";
+  if (token.includes("gotovo")) return "green";
+  if (token.includes("tijek")) return "amber";
+
+  return "slate";
+}
+
+function colorStyle(value: string) {
+  const theme = colorThemes[colorKey(value)];
+
+  return {
+    backgroundColor: theme.bg,
+    borderColor: theme.border,
+    color: theme.text,
+  };
+}
 
 function createLocalDraft(rawInput: string): InboxItem {
   return {
@@ -102,8 +154,10 @@ function createLocalDraft(rawInput: string): InboxItem {
     tags: [],
     priority: "srednje",
     when_to_tackle: "Kasnije",
+    due_date: null,
     status: "novo",
     dependencies: [],
+    details: [],
     notes: "",
     parse_status: "pending",
     parse_error: null,
@@ -115,6 +169,42 @@ function splitList(value: string): string[] {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function detailsText(details: InboxItem["details"]): string {
+  return details.map((detail) => `${detail.label}: ${detail.value}`).join("\n");
+}
+
+function splitDetails(value: string): InboxItem["details"] {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [label, ...rest] = line.split(":");
+      const detailValue = rest.join(":").trim();
+
+      return detailValue ? { label: label.trim(), value: detailValue } : { label: "Detalj", value: line };
+    });
+}
+
+function hydrateItem(item: Partial<InboxItem>): InboxItem {
+  return {
+    id: item.id ?? crypto.randomUUID(),
+    raw_input: item.raw_input ?? "",
+    name: item.name ?? "Novi unos",
+    space: item.space ?? "inbox",
+    tags: Array.isArray(item.tags) ? item.tags : [],
+    priority: item.priority ?? "srednje",
+    when_to_tackle: item.when_to_tackle ?? "Kasnije",
+    due_date: item.due_date ?? null,
+    status: item.status ?? "novo",
+    dependencies: Array.isArray(item.dependencies) ? item.dependencies : [],
+    details: Array.isArray(item.details) ? item.details : [],
+    notes: item.notes ?? "",
+    parse_status: item.parse_status ?? "pending",
+    parse_error: item.parse_error ?? null,
+  };
 }
 
 function comparableSpaceText(value: string): string {
@@ -150,6 +240,7 @@ export function VoiceInboxApp() {
   const [removedSpaces, setRemovedSpaces] = useState<Space[]>([]);
   const [isListening, setIsListening] = useState(false);
   const [isCaptureOpen, setIsCaptureOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("lista");
 
   const allTags = useMemo(() => {
     return ["Sve", ...Array.from(new Set(items.flatMap((item) => item.tags)))];
@@ -168,6 +259,11 @@ export function VoiceInboxApp() {
     return spaceMatch && tagMatch;
   });
 
+  const itemsByStatus = statusColumns.map((status) => ({
+    status,
+    items: visibleItems.filter((item) => item.status === status),
+  }));
+
   useEffect(() => {
     try {
       const supabase = createSupabaseBrowserClient();
@@ -179,7 +275,8 @@ export function VoiceInboxApp() {
         if (userEmail) {
           const response = await fetch("/api/items");
           if (response.ok) {
-            setItems((await response.json()) as InboxItem[]);
+            const loadedItems = (await response.json()) as Partial<InboxItem>[];
+            setItems(loadedItems.map(hydrateItem));
           }
         }
       });
@@ -219,7 +316,7 @@ export function VoiceInboxApp() {
         throw new Error("API route is not ready yet.");
       }
 
-      const createdItem = (await response.json()) as InboxItem;
+      const createdItem = hydrateItem((await response.json()) as Partial<InboxItem>);
       setItems((currentItems) => [createdItem, ...currentItems]);
       setRawInput("");
       setNotice("Spremljeno i parsirano.");
@@ -456,17 +553,46 @@ export function VoiceInboxApp() {
               Sve stavke
             </button>
             {allSpaces.map((space) => (
-              <button
+              <div
                 key={space}
-                className={`w-full rounded-2xl px-4 py-3 text-left text-sm transition ${
+                className={`flex w-full items-center justify-between gap-2 rounded-2xl px-4 py-3 text-left text-sm transition ${
                   activeSpace === space ? "bg-white text-slate-950" : "text-slate-300 hover:bg-white/10"
                 }`}
-                onClick={() => setActiveSpace(space)}
               >
-                {spaceLabel(space)}
-              </button>
+                <button className="min-w-0 flex-1 text-left" onClick={() => setActiveSpace(space)} type="button">
+                  {spaceLabel(space)}
+                </button>
+                <button
+                  aria-label={`Ukloni kategoriju ${spaceLabel(space)}`}
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs transition ${
+                    activeSpace === space ? "text-slate-500 hover:bg-slate-100" : "text-slate-500 hover:bg-white/10 hover:text-white"
+                  }`}
+                  onClick={() => removeSpace(space)}
+                  title="Ukloni kategoriju"
+                  type="button"
+                >
+                  x
+                </button>
+              </div>
             ))}
           </nav>
+
+          <div className="mt-4 flex gap-2 rounded-2xl border border-white/10 bg-white/5 p-2">
+            <input
+              className="min-w-0 flex-1 bg-transparent px-2 text-sm text-white outline-none placeholder:text-slate-500"
+              onChange={(event) => setNewSpace(event.target.value)}
+              placeholder="Novi prostor..."
+              value={newSpace}
+            />
+            <button
+              aria-label="Dodaj kategoriju"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-lg font-semibold text-slate-950 transition hover:bg-blue-100"
+              onClick={addCustomSpace}
+              type="button"
+            >
+              +
+            </button>
+          </div>
 
           <div className="mt-auto rounded-3xl border border-white/10 bg-white/5 p-4">
             <p className="text-sm font-medium text-blue-100">Fokus prostora</p>
@@ -519,6 +645,21 @@ export function VoiceInboxApp() {
 
           {notice ? <p className="rounded-2xl bg-blue-50 p-3 text-sm text-blue-900">{notice}</p> : null}
 
+          <div className="flex w-fit gap-2 rounded-full bg-white/70 p-1 shadow-sm">
+            {(["lista", "status"] as ViewMode[]).map((mode) => (
+              <button
+                key={mode}
+                className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                  viewMode === mode ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-white"
+                }`}
+                onClick={() => setViewMode(mode)}
+                type="button"
+              >
+                {mode === "lista" ? "Lista" : "Status"}
+              </button>
+            ))}
+          </div>
+
           <div className="grid min-w-0 gap-5">
             <div className="min-w-0 rounded-[2rem] border border-white/80 bg-white/70 p-4 shadow-xl shadow-slate-900/5 backdrop-blur">
               <div className="flex flex-col gap-3 border-b border-slate-200 pb-4">
@@ -537,6 +678,7 @@ export function VoiceInboxApp() {
                       className={`rounded-full px-4 py-2 text-sm font-medium ${
                         activeSpace === space ? "bg-slate-950 text-white" : "bg-white text-slate-600"
                       }`}
+                      style={activeSpace === space ? undefined : colorStyle(spaceLabel(space))}
                     >
                       <button onClick={() => setActiveSpace(space)} type="button">
                         {spaceLabel(space)}
@@ -581,6 +723,7 @@ export function VoiceInboxApp() {
                           ? "border-blue-700 bg-blue-700 text-white"
                           : "border-slate-200 bg-white text-slate-600"
                       }`}
+                      style={activeTag === tag ? undefined : colorStyle(tag)}
                       onClick={() => setActiveTag(tag)}
                     >
                       {tag}
@@ -589,13 +732,17 @@ export function VoiceInboxApp() {
                 </div>
               </div>
 
+              {viewMode === "lista" ? (
               <div className="mt-4 space-y-3">
                 {visibleItems.map((item) => (
                   <article key={item.id} className="min-w-0 rounded-3xl border border-slate-200 bg-[#fffdf7] p-4">
                     <div className="flex flex-col gap-4 md:flex-row md:justify-between">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-medium text-white">
+                          <span
+                            className="rounded-full border px-3 py-1 text-xs font-medium"
+                            style={colorStyle(spaceLabel(item.space))}
+                          >
                             {spaceLabel(item.space)}
                           </span>
                           <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-900">
@@ -648,6 +795,15 @@ export function VoiceInboxApp() {
                           />
                         </label>
                         <label className="space-y-1">
+                          <span className="text-slate-500">Datum</span>
+                          <input
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2"
+                            type="date"
+                            value={item.due_date ?? ""}
+                            onChange={(event) => updateItem(item.id, { due_date: event.target.value || null })}
+                          />
+                        </label>
+                        <label className="space-y-1">
                           <span className="text-slate-500">Status</span>
                           <select
                             className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2"
@@ -664,7 +820,21 @@ export function VoiceInboxApp() {
                       </div>
                     </div>
 
-                    <div className="mt-4 grid gap-3 md:grid-cols-3">
+                    {item.details.length ? (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {item.details.map((detail) => (
+                          <span
+                            key={`${detail.label}-${detail.value}`}
+                            className="rounded-full border px-3 py-1 text-sm"
+                            style={colorStyle(detail.label)}
+                          >
+                            {detail.label}: {detail.value}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    <div className="mt-4 grid gap-3 md:grid-cols-4">
                       <label className="space-y-1">
                         <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
                           Tagovi
@@ -687,6 +857,16 @@ export function VoiceInboxApp() {
                       </label>
                       <label className="space-y-1">
                         <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                          Detalji
+                        </span>
+                        <textarea
+                          className="min-h-20 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                          value={detailsText(item.details)}
+                          onChange={(event) => updateItem(item.id, { details: splitDetails(event.target.value) })}
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
                           Bilješke
                         </span>
                         <textarea
@@ -699,6 +879,45 @@ export function VoiceInboxApp() {
                   </article>
                 ))}
               </div>
+              ) : (
+                <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                  {itemsByStatus.map(({ status, items: statusItems }) => (
+                    <section key={status} className="rounded-3xl border border-slate-200 bg-white/70 p-3">
+                      <div className="mb-3 flex items-center justify-between">
+                        <h3 className="font-semibold text-slate-900">{statusLabels[status]}</h3>
+                        <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">
+                          {statusItems.length}
+                        </span>
+                      </div>
+                      <div className="space-y-3">
+                        {statusItems.map((item) => (
+                          <article key={item.id} className="rounded-2xl border border-slate-200 bg-[#fffdf7] p-3">
+                            <div className="flex flex-wrap gap-2">
+                              <span className="rounded-full border px-2 py-1 text-xs" style={colorStyle(spaceLabel(item.space))}>
+                                {spaceLabel(item.space)}
+                              </span>
+                              {item.due_date ? (
+                                <span className="rounded-full bg-blue-50 px-2 py-1 text-xs text-blue-800">{item.due_date}</span>
+                              ) : null}
+                            </div>
+                            <p className="mt-3 font-semibold text-slate-950">{item.name}</p>
+                            <p className="mt-1 text-sm text-slate-500">{item.when_to_tackle}</p>
+                            {item.details.length ? (
+                              <div className="mt-3 flex flex-wrap gap-1">
+                                {item.details.slice(0, 3).map((detail) => (
+                                  <span key={`${detail.label}-${detail.value}`} className="rounded-full border px-2 py-1 text-xs" style={colorStyle(detail.label)}>
+                                    {detail.label}: {detail.value}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
+                          </article>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </section>

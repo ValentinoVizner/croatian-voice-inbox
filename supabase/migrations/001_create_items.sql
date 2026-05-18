@@ -11,8 +11,10 @@ create table public.items (
   tags jsonb not null default '[]'::jsonb,
   priority text not null default 'srednje',
   when_to_tackle text not null default 'kasnije',
+  due_date date,
   status text not null default 'novo',
   dependencies jsonb not null default '[]'::jsonb,
+  details jsonb not null default '[]'::jsonb,
   notes text not null default '',
   parse_status text not null default 'pending',
   parse_error text,
@@ -27,7 +29,8 @@ create table public.items (
     parse_status in ('pending', 'parsed', 'failed')
   ),
   constraint items_tags_array_check check (jsonb_typeof(tags) = 'array'),
-  constraint items_dependencies_array_check check (jsonb_typeof(dependencies) = 'array')
+  constraint items_dependencies_array_check check (jsonb_typeof(dependencies) = 'array'),
+  constraint items_details_array_check check (jsonb_typeof(details) = 'array')
 );
 
 create index items_user_created_at_idx on public.items (user_id, created_at desc);

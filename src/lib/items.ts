@@ -16,6 +16,11 @@ export type Priority = (typeof PRIORITIES)[number];
 export type ItemStatus = (typeof STATUSES)[number];
 export type ParseStatus = (typeof PARSE_STATUSES)[number];
 
+export type ItemDetail = {
+  label: string;
+  value: string;
+};
+
 export type Item = {
   id: string;
   user_id: string;
@@ -27,8 +32,10 @@ export type Item = {
   tags: string[];
   priority: Priority;
   when_to_tackle: string;
+  due_date: string | null;
   status: ItemStatus;
   dependencies: string[];
+  details: ItemDetail[];
   notes: string;
   parse_status: ParseStatus;
   parse_error: string | null;
@@ -55,7 +62,7 @@ export const priorityLabels: Record<Priority, string> = {
 };
 
 export const statusLabels: Record<ItemStatus, string> = {
-  novo: "Novo",
+  novo: "Planirano",
   u_tijeku: "U tijeku",
   gotovo: "Gotovo",
 };

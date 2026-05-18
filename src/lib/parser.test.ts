@@ -10,8 +10,13 @@ describe("normalizeParsedItem", () => {
         tags: [" Vrtlarstvo ", "Drvodjelstvo", ""],
         priority: "Visok",
         whenToTackle: "Ovaj tjedan",
+        dueDate: "2026-05-25",
         status: "Za napraviti",
         dependencies: ["Izmjeriti gredice"],
+        details: [
+          { label: "Količina", value: "10 m dasaka" },
+          { label: "Materijal", value: "vijci za drvo" },
+        ],
         notes: "Provjeriti impregnaciju.",
       },
       "Trebam kupiti daske za vrtne gredice."
@@ -23,8 +28,13 @@ describe("normalizeParsedItem", () => {
       tags: ["Vrtlarstvo", "Drvodjelstvo"],
       priority: "visoko",
       when_to_tackle: "Ovaj tjedan",
+      due_date: "2026-05-25",
       status: "novo",
       dependencies: ["Izmjeriti gredice"],
+      details: [
+        { label: "Količina", value: "10 m dasaka" },
+        { label: "Materijal", value: "vijci za drvo" },
+      ],
       notes: "Provjeriti impregnaciju.",
     });
   });
@@ -48,8 +58,10 @@ describe("normalizeParsedItem", () => {
       tags: [],
       priority: "srednje",
       when_to_tackle: "Kasnije",
+      due_date: null,
       status: "novo",
       dependencies: [],
+      details: [],
       notes: "",
     });
   });

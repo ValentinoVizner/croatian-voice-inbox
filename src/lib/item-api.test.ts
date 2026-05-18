@@ -8,8 +8,10 @@ const parsedItem: NormalizedParsedItem = {
   tags: ["Vrtlarstvo"],
   priority: "visoko",
   when_to_tackle: "Ovaj tjedan",
+  due_date: "2026-05-25",
   status: "novo",
   dependencies: ["Izmjeriti gredice"],
+  details: [{ label: "Količina", value: "10 m dasaka" }],
   notes: "Provjeriti impregnaciju.",
 };
 
@@ -99,7 +101,9 @@ describe("handleUpdateItemRequest", () => {
           id: "item-1",
           priority: "Hitno",
           status: "U tijeku",
+          due_date: "2026-05-25",
           dependencies: ["Kupiti boju"],
+          details: [{ label: "Količina", value: "2 kante" }],
           notes: "Prvo zaštititi rubove.",
         }),
       }),
@@ -113,7 +117,9 @@ describe("handleUpdateItemRequest", () => {
     expect(updateItem).toHaveBeenCalledWith("user-1", "item-1", {
       priority: "hitno",
       status: "u_tijeku",
+      due_date: "2026-05-25",
       dependencies: ["Kupiti boju"],
+      details: [{ label: "Količina", value: "2 kante" }],
       notes: "Prvo zaštititi rubove.",
     });
   });

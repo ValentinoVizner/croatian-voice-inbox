@@ -1,5 +1,5 @@
 import { normalizeParsedItem, type NormalizedParsedItem } from "./parser";
-import type { ItemStatus, Priority, Space } from "./items";
+import type { ItemDetail, ItemStatus, Priority, Space } from "./items";
 
 export type CreateItemPayload = NormalizedParsedItem & {
   user_id: string;
@@ -20,8 +20,10 @@ export type UpdateItemPayload = Partial<{
   tags: string[];
   priority: Priority;
   when_to_tackle: string;
+  due_date: string | null;
   status: ItemStatus;
   dependencies: string[];
+  details: ItemDetail[];
   notes: string;
 }>;
 
@@ -102,6 +104,40 @@ function bodyArray(value: unknown): string[] | undefined {
   return value
     .map((item) => bodyText(item))
     .filter((item): item is string => Boolean(item));
+}
+
+function bodyDetails(value: unknown): ItemDetail[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  return value
+    .map((item) => {
+      if (typeof item !== "object" || item === null) {
+        return null;
+      }
+
+      const record = item as Record<string, unknown>;
+      const label = bodyText(record.label);
+      const detailValue = bodyText(record.value);
+
+      return label && detailValue ? { label, value: detailValue } : null;
+    })
+    .filter((item): item is ItemDetail => Boolean(item));
+}
+
+function bodyDate(value: unknown): string | null | undefined {
+  if (value === null) {
+    return null;
+  }
+
+  const date = bodyText(value);
+
+  if (!date) {
+    return undefined;
+  }
+
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined;
 }
 
 function normalizeBodyToken(value: unknown): string {
@@ -191,8 +227,10 @@ export async function handleUpdateItemRequest(
   const tags = bodyArray(body.tags);
   const priority = updatePriority(body.priority);
   const whenToTackle = bodyText(body.whenToTackle) ?? bodyText(body.when_to_tackle);
+  const dueDate = bodyDate(body.dueDate ?? body.due_date);
   const status = updateStatus(body.status);
   const dependenciesList = bodyArray(body.dependencies);
+  const details = bodyDetails(body.details);
   const notes = bodyText(body.notes);
 
   if (name) patch.name = name;
@@ -200,8 +238,10 @@ export async function handleUpdateItemRequest(
   if (tags) patch.tags = tags;
   if (priority) patch.priority = priority;
   if (whenToTackle) patch.when_to_tackle = whenToTackle;
+  if (dueDate !== undefined) patch.due_date = dueDate;
   if (status) patch.status = status;
   if (dependenciesList) patch.dependencies = dependenciesList;
+  if (details) patch.details = details;
   if (notes !== undefined) patch.notes = notes;
 
   const item = await dependencies.updateItem(userId, itemId, patch);
