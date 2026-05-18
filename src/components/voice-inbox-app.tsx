@@ -117,6 +117,15 @@ function splitList(value: string): string[] {
     .filter(Boolean);
 }
 
+function comparableSpaceText(value: string): string {
+  return value
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+}
+
 function MicrophoneIcon({ className }: { className: string }) {
   return (
     <svg aria-hidden="true" className={className} fill="currentColor" viewBox="0 0 24 24">
@@ -138,6 +147,7 @@ export function VoiceInboxApp() {
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   const [newSpace, setNewSpace] = useState("");
   const [customSpaces, setCustomSpaces] = useState<Space[]>([]);
+  const [removedSpaces, setRemovedSpaces] = useState<Space[]>([]);
   const [isListening, setIsListening] = useState(false);
   const [isCaptureOpen, setIsCaptureOpen] = useState(false);
 
@@ -146,8 +156,10 @@ export function VoiceInboxApp() {
   }, [items]);
 
   const allSpaces = useMemo(() => {
-    return Array.from(new Set([...DEFAULT_SPACES, ...customSpaces, ...items.map((item) => item.space)]));
-  }, [customSpaces, items]);
+    const spaces = Array.from(new Set([...DEFAULT_SPACES, ...customSpaces, ...items.map((item) => item.space)]));
+
+    return spaces.filter((space) => !removedSpaces.includes(space));
+  }, [customSpaces, items, removedSpaces]);
 
   const visibleItems = items.filter((item) => {
     const spaceMatch = activeSpace === "sve" || item.space === activeSpace;
@@ -282,11 +294,35 @@ export function VoiceInboxApp() {
       return;
     }
 
-    setCustomSpaces((currentSpaces) =>
-      currentSpaces.includes(trimmedSpace) ? currentSpaces : [...currentSpaces, trimmedSpace]
+    const comparableSpace = comparableSpaceText(trimmedSpace);
+    const defaultSpace = DEFAULT_SPACES.find(
+      (space) => comparableSpaceText(space) === comparableSpace || comparableSpaceText(spaceLabel(space)) === comparableSpace
     );
-    setActiveSpace(trimmedSpace);
+    const spaceToAdd = defaultSpace ?? trimmedSpace;
+
+    setCustomSpaces((currentSpaces) =>
+      currentSpaces.includes(spaceToAdd) || DEFAULT_SPACES.some((space) => space === spaceToAdd)
+        ? currentSpaces
+        : [...currentSpaces, spaceToAdd]
+    );
+    setRemovedSpaces((currentSpaces) => currentSpaces.filter((space) => space !== spaceToAdd));
+    setActiveSpace(spaceToAdd);
     setNewSpace("");
+  }
+
+  function removeSpace(spaceToRemove: Space) {
+    setRemovedSpaces((currentSpaces) =>
+      currentSpaces.includes(spaceToRemove) ? currentSpaces : [...currentSpaces, spaceToRemove]
+    );
+    setCustomSpaces((currentSpaces) => currentSpaces.filter((space) => space !== spaceToRemove));
+
+    if (activeSpace === spaceToRemove) {
+      setActiveSpace("sve");
+    }
+  }
+
+  function itemSpaceOptions(itemSpace: Space) {
+    return allSpaces.includes(itemSpace) ? allSpaces : [itemSpace, ...allSpaces];
   }
 
   function handleVoiceInput() {
@@ -321,17 +357,11 @@ export function VoiceInboxApp() {
     recognition.start();
   }
 
-  function captureForm(variant: "inline" | "modal") {
-    const isModal = variant === "modal";
-
+  function captureForm() {
     return (
       <form
         onSubmit={handleSubmit}
-        className={
-          isModal
-            ? "max-h-[calc(100vh-5rem)] min-w-0 overflow-y-auto rounded-t-[2rem] border border-white/80 bg-[#fffaf0] p-5 shadow-2xl shadow-slate-950/30"
-            : "hidden min-w-0 rounded-[2rem] border border-white/80 bg-[#fffaf0] p-5 shadow-xl shadow-slate-900/5 xl:block"
-        }
+        className="max-h-[calc(100vh-5rem)] min-w-0 overflow-y-auto rounded-t-[2rem] border border-white/80 bg-[#fffaf0] p-5 shadow-2xl shadow-slate-950/30 sm:rounded-[2rem]"
       >
         <div className="flex items-center justify-between gap-4">
           <div>
@@ -339,15 +369,13 @@ export function VoiceInboxApp() {
             <h3 className="text-2xl font-semibold">Glasovni inbox</h3>
           </div>
           <div className="flex items-center gap-2">
-            {isModal ? (
-              <button
-                className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm"
-                onClick={() => setIsCaptureOpen(false)}
-                type="button"
-              >
-                Zatvori
-              </button>
-            ) : null}
+            <button
+              className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm"
+              onClick={() => setIsCaptureOpen(false)}
+              type="button"
+            >
+              Zatvori
+            </button>
             <button
               aria-label="Pokreni glasovni unos"
               className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-blue-700 text-white shadow-lg shadow-blue-700/30 ring-4 ring-blue-100 transition active:scale-95"
@@ -410,7 +438,7 @@ export function VoiceInboxApp() {
   }
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#f3efe6] pb-28 text-slate-950 xl:pb-0">
+    <main className="min-h-screen overflow-x-hidden bg-[#f3efe6] pb-28 text-slate-950">
       <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-6 px-4 py-4 sm:px-6 lg:grid lg:grid-cols-[260px_1fr] lg:py-8">
         <aside className="hidden rounded-[2rem] border border-white/60 bg-[#07131f] p-5 text-white shadow-2xl shadow-slate-900/20 lg:flex lg:flex-col">
           <div className="mb-10">
@@ -489,11 +517,9 @@ export function VoiceInboxApp() {
             </div>
           </header>
 
-          {notice ? <p className="rounded-2xl bg-blue-50 p-3 text-sm text-blue-900 xl:hidden">{notice}</p> : null}
+          {notice ? <p className="rounded-2xl bg-blue-50 p-3 text-sm text-blue-900">{notice}</p> : null}
 
-          <div className="grid min-w-0 gap-5 xl:grid-cols-[420px_1fr]">
-            {captureForm("inline")}
-
+          <div className="grid min-w-0 gap-5">
             <div className="min-w-0 rounded-[2rem] border border-white/80 bg-white/70 p-4 shadow-xl shadow-slate-900/5 backdrop-blur">
               <div className="flex flex-col gap-3 border-b border-slate-200 pb-4">
                 <div className="flex flex-wrap gap-2">
@@ -506,15 +532,27 @@ export function VoiceInboxApp() {
                     Sve
                   </button>
                   {allSpaces.map((space) => (
-                    <button
+                    <span
                       key={space}
                       className={`rounded-full px-4 py-2 text-sm font-medium ${
                         activeSpace === space ? "bg-slate-950 text-white" : "bg-white text-slate-600"
                       }`}
-                      onClick={() => setActiveSpace(space)}
                     >
-                      {spaceLabel(space)}
-                    </button>
+                      <button onClick={() => setActiveSpace(space)} type="button">
+                        {spaceLabel(space)}
+                      </button>
+                      <button
+                        aria-label={`Ukloni kategoriju ${spaceLabel(space)}`}
+                        className={`ml-2 rounded-full px-1 ${
+                          activeSpace === space ? "text-white/70 hover:text-white" : "text-slate-400 hover:text-slate-950"
+                        }`}
+                        onClick={() => removeSpace(space)}
+                        title="Ukloni kategoriju"
+                        type="button"
+                      >
+                        x
+                      </button>
+                    </span>
                   ))}
                 </div>
 
@@ -580,7 +618,7 @@ export function VoiceInboxApp() {
                             value={item.space}
                             onChange={(event) => updateItem(item.id, { space: event.target.value })}
                           >
-                            {allSpaces.map((space) => (
+                            {itemSpaceOptions(item.space).map((space) => (
                               <option key={space} value={space}>
                                 {spaceLabel(space)}
                               </option>
@@ -669,7 +707,7 @@ export function VoiceInboxApp() {
       {!isCaptureOpen ? (
         <button
           aria-label="Otvori glasovni unos"
-          className="fixed right-4 z-40 flex items-center gap-3 rounded-full bg-slate-950 py-2 pl-4 pr-2 text-sm font-semibold text-white shadow-2xl shadow-slate-950/30 ring-1 ring-white/40 transition active:scale-95 xl:hidden"
+          className="fixed right-4 z-40 flex items-center gap-3 rounded-full bg-slate-950 py-2 pl-4 pr-2 text-sm font-semibold text-white shadow-2xl shadow-slate-950/30 ring-1 ring-white/40 transition active:scale-95"
           onClick={() => setIsCaptureOpen(true)}
           style={{ bottom: "calc(1rem + env(safe-area-inset-bottom))" }}
           type="button"
@@ -684,7 +722,7 @@ export function VoiceInboxApp() {
       {isCaptureOpen ? (
         <div
           aria-modal="true"
-          className="fixed inset-0 z-50 flex items-end bg-slate-950/50 px-0 pt-16 backdrop-blur-sm xl:hidden"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 px-0 pt-16 backdrop-blur-sm sm:items-center sm:px-6"
           role="dialog"
         >
           <button
@@ -693,7 +731,7 @@ export function VoiceInboxApp() {
             onClick={() => setIsCaptureOpen(false)}
             type="button"
           />
-          <div className="relative w-full">{captureForm("modal")}</div>
+          <div className="relative w-full sm:max-w-xl">{captureForm()}</div>
         </div>
       ) : null}
     </main>
