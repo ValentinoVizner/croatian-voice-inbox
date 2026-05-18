@@ -7,7 +7,7 @@ create table public.items (
   updated_at timestamptz not null default now(),
   raw_input text not null,
   name text not null default '',
-  space text not null default 'ideja',
+  space text not null default 'inbox',
   tags jsonb not null default '[]'::jsonb,
   priority text not null default 'srednje',
   when_to_tackle text not null default 'kasnije',
@@ -16,9 +16,7 @@ create table public.items (
   notes text not null default '',
   parse_status text not null default 'pending',
   parse_error text,
-  constraint items_space_check check (
-    space in ('ideja', 'posao', 'kupovina', 'materijal', 'cekanje', 'gotovo')
-  ),
+  constraint items_space_present_check check (length(btrim(space)) > 0),
   constraint items_priority_check check (
     priority in ('nisko', 'srednje', 'visoko', 'hitno')
   ),

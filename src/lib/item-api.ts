@@ -113,6 +113,20 @@ function normalizeBodyToken(value: unknown): string {
     .replace(/\s+/g, " ") ?? "";
 }
 
+function slugifyBodySpace(value: unknown): string | undefined {
+  const token = normalizeBodyToken(value);
+
+  if (!token) {
+    return undefined;
+  }
+
+  if (["nepoznato", "unknown"].includes(token)) {
+    return undefined;
+  }
+
+  return token.replace(/\s+/g, "_");
+}
+
 function updatePriority(value: unknown): Priority | undefined {
   const token = normalizeBodyToken(value);
 
@@ -137,14 +151,14 @@ function updateStatus(value: unknown): ItemStatus | undefined {
 function updateSpace(value: unknown): Space | undefined {
   const token = normalizeBodyToken(value);
 
-  if (token === "ideja") return "ideja";
-  if (token === "posao") return "posao";
+  if (token === "inbox") return "inbox";
+  if (["ideja", "ideje"].includes(token)) return "ideje";
+  if (["projekt", "projekti"].includes(token)) return "projekti";
   if (token === "kupovina") return "kupovina";
-  if (token === "materijal") return "materijal";
-  if (["cekam", "cekanje", "ceka"].includes(token)) return "cekanje";
-  if (token === "gotovo") return "gotovo";
+  if (["za odluciti", "odluciti"].includes(token)) return "za_odluciti";
+  if (["za napraviti", "posao", "zadatak"].includes(token)) return "za_napraviti";
 
-  return undefined;
+  return slugifyBodySpace(value);
 }
 
 export async function handleUpdateItemRequest(

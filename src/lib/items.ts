@@ -1,17 +1,17 @@
-export const SPACES = [
-  "ideja",
-  "posao",
+export const DEFAULT_SPACES = [
+  "inbox",
+  "ideje",
+  "projekti",
   "kupovina",
-  "materijal",
-  "cekanje",
-  "gotovo",
+  "za_odluciti",
+  "za_napraviti",
 ] as const;
 
 export const PRIORITIES = ["nisko", "srednje", "visoko", "hitno"] as const;
 export const STATUSES = ["novo", "u_tijeku", "gotovo"] as const;
 export const PARSE_STATUSES = ["pending", "parsed", "failed"] as const;
 
-export type Space = (typeof SPACES)[number];
+export type Space = string;
 export type Priority = (typeof PRIORITIES)[number];
 export type ItemStatus = (typeof STATUSES)[number];
 export type ParseStatus = (typeof PARSE_STATUSES)[number];
@@ -34,14 +34,18 @@ export type Item = {
   parse_error: string | null;
 };
 
-export const spaceLabels: Record<Space, string> = {
-  ideja: "Ideja",
-  posao: "Posao",
+export const defaultSpaceLabels: Record<(typeof DEFAULT_SPACES)[number], string> = {
+  inbox: "Inbox",
+  ideje: "Ideje",
+  projekti: "Projekti",
   kupovina: "Kupovina",
-  materijal: "Materijal",
-  cekanje: "Čekam",
-  gotovo: "Gotovo",
+  za_odluciti: "Za odlučiti",
+  za_napraviti: "Za napraviti",
 };
+
+export function spaceLabel(space: Space): string {
+  return defaultSpaceLabels[space as (typeof DEFAULT_SPACES)[number]] ?? space;
+}
 
 export const priorityLabels: Record<Priority, string> = {
   nisko: "Nisko",

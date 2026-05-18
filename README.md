@@ -1,13 +1,13 @@
 # Croatian Voice Inbox
 
-A phone-friendly Croatian AI note-taking app for home projects. Speak or type a raw note, let Gemini parse it, then organize it by spaces like `Ideja`, `Posao`, `Kupovina`, `Materijal`, `Čekam`, and `Gotovo`.
+A phone-friendly Croatian AI note-taking app for home projects. Speak or type a raw note, let Gemini parse it, then organize it by spaces like `Inbox`, `Ideje`, `Projekti`, `Kupovina`, `Za odlučiti`, and `Za napraviti`.
 
 ## Features
 
 - Croatian voice/text capture through a large mobile-first inbox.
 - Gemini parsing into name, space, tags, priority, timing, status, dependencies, and notes.
 - Supabase auth and row-level secured `items` table.
-- Zen-style desktop spaces and mobile-friendly filters.
+- Zen-style desktop spaces, mobile-friendly filters, and user-added custom spaces.
 - Inline editing for parsed fields.
 
 ## Getting Started

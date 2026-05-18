@@ -6,11 +6,11 @@ import {
   type ParseStatus,
   type Priority,
   type Space,
+  DEFAULT_SPACES,
   PRIORITIES,
-  SPACES,
   STATUSES,
   priorityLabels,
-  spaceLabels,
+  spaceLabel,
   statusLabels,
 } from "@/lib/items";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -51,7 +51,7 @@ const sampleItems: InboxItem[] = [
     raw_input:
       "Popravak keramičkih pločica u hodniku, prvo treba naći iste ili slične pločice.",
     name: "Popraviti keramičke pločice",
-    space: "cekanje",
+    space: "za_odluciti",
     tags: ["Keramika", "Kuća"],
     priority: "srednje",
     when_to_tackle: "Kasnije",
@@ -70,7 +70,7 @@ function createLocalDraft(rawInput: string): InboxItem {
     id: crypto.randomUUID(),
     raw_input: rawInput,
     name: rawInput.split(/[,.]/)[0]?.slice(0, 80) || "Novi unos",
-    space: "ideja",
+    space: "inbox",
     tags: [],
     priority: "srednje",
     when_to_tackle: "Kasnije",
@@ -98,10 +98,16 @@ export function VoiceInboxApp() {
   const [notice, setNotice] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
+  const [newSpace, setNewSpace] = useState("");
+  const [customSpaces, setCustomSpaces] = useState<Space[]>([]);
 
   const allTags = useMemo(() => {
     return ["Sve", ...Array.from(new Set(items.flatMap((item) => item.tags)))];
   }, [items]);
+
+  const allSpaces = useMemo(() => {
+    return Array.from(new Set([...DEFAULT_SPACES, ...customSpaces, ...items.map((item) => item.space)]));
+  }, [customSpaces, items]);
 
   const visibleItems = items.filter((item) => {
     const spaceMatch = activeSpace === "sve" || item.space === activeSpace;
@@ -221,6 +227,20 @@ export function VoiceInboxApp() {
     }
   }
 
+  function addCustomSpace() {
+    const trimmedSpace = newSpace.trim();
+
+    if (!trimmedSpace) {
+      return;
+    }
+
+    setCustomSpaces((currentSpaces) =>
+      currentSpaces.includes(trimmedSpace) ? currentSpaces : [...currentSpaces, trimmedSpace]
+    );
+    setActiveSpace(trimmedSpace);
+    setNewSpace("");
+  }
+
   return (
     <main className="min-h-screen overflow-hidden bg-[#f3efe6] text-slate-950">
       <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-6 px-4 py-4 sm:px-6 lg:grid lg:grid-cols-[260px_1fr] lg:py-8">
@@ -239,7 +259,7 @@ export function VoiceInboxApp() {
             >
               Sve stavke
             </button>
-            {SPACES.map((space) => (
+            {allSpaces.map((space) => (
               <button
                 key={space}
                 className={`w-full rounded-2xl px-4 py-3 text-left text-sm transition ${
@@ -247,7 +267,7 @@ export function VoiceInboxApp() {
                 }`}
                 onClick={() => setActiveSpace(space)}
               >
-                {spaceLabels[space]}
+                {spaceLabel(space)}
               </button>
             ))}
           </nav>
@@ -358,7 +378,7 @@ export function VoiceInboxApp() {
                   >
                     Sve
                   </button>
-                  {SPACES.map((space) => (
+                  {allSpaces.map((space) => (
                     <button
                       key={space}
                       className={`rounded-full px-4 py-2 text-sm font-medium ${
@@ -366,9 +386,25 @@ export function VoiceInboxApp() {
                       }`}
                       onClick={() => setActiveSpace(space)}
                     >
-                      {spaceLabels[space]}
+                      {spaceLabel(space)}
                     </button>
                   ))}
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    className="min-w-0 flex-1 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm"
+                    onChange={(event) => setNewSpace(event.target.value)}
+                    placeholder="Dodaj prostor..."
+                    value={newSpace}
+                  />
+                  <button
+                    className="rounded-full bg-slate-950 px-4 py-2 text-sm font-medium text-white"
+                    onClick={addCustomSpace}
+                    type="button"
+                  >
+                    Dodaj
+                  </button>
                 </div>
 
                 <div className="flex gap-2 overflow-x-auto pb-1">
@@ -395,7 +431,7 @@ export function VoiceInboxApp() {
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-medium text-white">
-                            {spaceLabels[item.space]}
+                            {spaceLabel(item.space)}
                           </span>
                           <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-900">
                             {priorityLabels[item.priority]}
@@ -415,11 +451,11 @@ export function VoiceInboxApp() {
                           <select
                             className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2"
                             value={item.space}
-                            onChange={(event) => updateItem(item.id, { space: event.target.value as Space })}
+                            onChange={(event) => updateItem(item.id, { space: event.target.value })}
                           >
-                            {SPACES.map((space) => (
+                            {allSpaces.map((space) => (
                               <option key={space} value={space}>
-                                {spaceLabels[space]}
+                                {spaceLabel(space)}
                               </option>
                             ))}
                           </select>

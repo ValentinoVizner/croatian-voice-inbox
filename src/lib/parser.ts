@@ -27,6 +27,10 @@ function normalizeToken(value: unknown): string {
     .replace(/\s+/g, " ");
 }
 
+function slugifySpace(value: unknown): string {
+  return normalizeToken(value).replace(/\s+/g, "_");
+}
+
 function arrayOfStrings(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -41,13 +45,15 @@ function arrayOfStrings(value: unknown): string[] {
 function normalizeSpace(value: unknown): Space {
   const token = normalizeToken(value);
 
-  if (["posao", "zadatak", "task", "rad"].includes(token)) return "posao";
+  if (["inbox", "ulaz", "ulazno", "novo"].includes(token)) return "inbox";
+  if (["ideja", "ideje", "idea"].includes(token)) return "ideje";
+  if (["projekt", "projekti", "project"].includes(token)) return "projekti";
   if (["kupovina", "kupiti", "shopping"].includes(token)) return "kupovina";
-  if (["materijal", "materijali"].includes(token)) return "materijal";
-  if (["cekam", "cekanje", "ceka", "blokirano", "waiting"].includes(token)) return "cekanje";
-  if (["gotovo", "done", "zavrseno"].includes(token)) return "gotovo";
+  if (["za odluciti", "odluciti", "decision", "decide"].includes(token)) return "za_odluciti";
+  if (["za napraviti", "posao", "zadatak", "task", "rad"].includes(token)) return "za_napraviti";
+  if (["nepoznato", "unknown", "ostalo", "other"].includes(token)) return "inbox";
 
-  return "ideja";
+  return slugifySpace(value) || "inbox";
 }
 
 function normalizePriority(value: unknown): Priority {
@@ -103,7 +109,8 @@ const parserSystemPrompt = `You parse Croatian home/project voice notes into str
 Return only valid JSON with these keys:
 name, space, tags, priority, whenToTackle, status, dependencies, notes.
 
-Allowed space labels: Ideja, Posao, Kupovina, Materijal, Čekam, Gotovo.
+Preferred space labels: Inbox, Ideje, Projekti, Kupovina, Za odlučiti, Za napraviti.
+If none fit, return a short custom Croatian space label.
 Allowed priority labels: Nisko, Srednje, Visoko, Hitno.
 Allowed status labels: Novo, U tijeku, Gotovo.
 Tags are flexible Croatian craft/work areas, for example Drvodjelstvo, Malerija, Vrtlarstvo, Keramika, Kuća.

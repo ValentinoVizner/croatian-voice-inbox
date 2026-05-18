@@ -6,7 +6,7 @@ describe("normalizeParsedItem", () => {
     const item = normalizeParsedItem(
       {
         name: "Kupiti daske",
-        space: "Kupovina",
+        space: "Za odlučiti",
         tags: [" Vrtlarstvo ", "Drvodjelstvo", ""],
         priority: "Visok",
         whenToTackle: "Ovaj tjedan",
@@ -19,7 +19,7 @@ describe("normalizeParsedItem", () => {
 
     expect(item).toEqual({
       name: "Kupiti daske",
-      space: "kupovina",
+      space: "za_odluciti",
       tags: ["Vrtlarstvo", "Drvodjelstvo"],
       priority: "visoko",
       when_to_tackle: "Ovaj tjedan",
@@ -44,7 +44,7 @@ describe("normalizeParsedItem", () => {
 
     expect(item).toEqual({
       name: "Popraviti keramičke pločice u hodniku jer se jedna klima.",
-      space: "ideja",
+      space: "inbox",
       tags: [],
       priority: "srednje",
       when_to_tackle: "Kasnije",
