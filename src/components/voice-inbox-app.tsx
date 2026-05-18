@@ -236,15 +236,17 @@ export function VoiceInboxApp() {
   const [email, setEmail] = useState("");
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   const [newSpace, setNewSpace] = useState("");
+  const [newTag, setNewTag] = useState("");
   const [customSpaces, setCustomSpaces] = useState<Space[]>([]);
+  const [customTags, setCustomTags] = useState<string[]>([]);
   const [removedSpaces, setRemovedSpaces] = useState<Space[]>([]);
   const [isListening, setIsListening] = useState(false);
   const [isCaptureOpen, setIsCaptureOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("lista");
 
   const allTags = useMemo(() => {
-    return ["Sve", ...Array.from(new Set(items.flatMap((item) => item.tags)))];
-  }, [items]);
+    return ["Sve", ...Array.from(new Set([...customTags, ...items.flatMap((item) => item.tags)]))];
+  }, [customTags, items]);
 
   const allSpaces = useMemo(() => {
     const spaces = Array.from(new Set([...DEFAULT_SPACES, ...customSpaces, ...items.map((item) => item.space)]));
@@ -416,6 +418,18 @@ export function VoiceInboxApp() {
     if (activeSpace === spaceToRemove) {
       setActiveSpace("sve");
     }
+  }
+
+  function addCustomTag() {
+    const trimmedTag = newTag.trim();
+
+    if (!trimmedTag) {
+      return;
+    }
+
+    setCustomTags((currentTags) => (currentTags.includes(trimmedTag) ? currentTags : [...currentTags, trimmedTag]));
+    setActiveTag(trimmedTag);
+    setNewTag("");
   }
 
   function itemSpaceOptions(itemSpace: Space) {
@@ -711,6 +725,22 @@ export function VoiceInboxApp() {
                     type="button"
                   >
                     Dodaj
+                  </button>
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    className="min-w-0 flex-1 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm"
+                    onChange={(event) => setNewTag(event.target.value)}
+                    placeholder="Dodaj tag..."
+                    value={newTag}
+                  />
+                  <button
+                    className="rounded-full bg-blue-700 px-4 py-2 text-sm font-medium text-white"
+                    onClick={addCustomTag}
+                    type="button"
+                  >
+                    Dodaj tag
                   </button>
                 </div>
 
