@@ -216,6 +216,17 @@ function comparableSpaceText(value: string): string {
     .replace(/\s+/g, "_");
 }
 
+function isAppleMobileDevice() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+
 function MicrophoneIcon({ className }: { className: string }) {
   return (
     <svg aria-hidden="true" className={className} fill="currentColor" viewBox="0 0 24 24">
@@ -242,6 +253,7 @@ export function VoiceInboxApp() {
   const [removedSpaces, setRemovedSpaces] = useState<Space[]>([]);
   const [isListening, setIsListening] = useState(false);
   const [isCaptureOpen, setIsCaptureOpen] = useState(false);
+  const [prefersKeyboardDictation, setPrefersKeyboardDictation] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("lista");
 
   const allTags = useMemo(() => {
@@ -265,6 +277,10 @@ export function VoiceInboxApp() {
     status,
     items: visibleItems.filter((item) => item.status === status),
   }));
+
+  useEffect(() => {
+    setPrefersKeyboardDictation(isAppleMobileDevice());
+  }, []);
 
   useEffect(() => {
     try {
@@ -436,13 +452,32 @@ export function VoiceInboxApp() {
     return allSpaces.includes(itemSpace) ? allSpaces : [itemSpace, ...allSpaces];
   }
 
+  function focusVoiceTextarea() {
+    window.setTimeout(() => textareaRef.current?.focus(), 50);
+  }
+
+  function openCapture() {
+    setIsCaptureOpen(true);
+
+    if (prefersKeyboardDictation) {
+      focusVoiceTextarea();
+      setNotice("Dodirni polje za unos pa mikrofon na tipkovnici za diktiranje.");
+    }
+  }
+
   function handleVoiceInput() {
+    if (prefersKeyboardDictation) {
+      focusVoiceTextarea();
+      setNotice("Na iPhoneu/Chrome iOS koristi mikrofon na tipkovnici nakon što se polje fokusira.");
+      return;
+    }
+
     const speechWindow = window as SpeechWindow;
     const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
 
     if (!Recognition) {
       textareaRef.current?.focus();
-      setNotice("Na iPhoneu dodirni polje za unos pa mikrofon na tipkovnici za diktiranje.");
+      setNotice("Ovaj browser ne podržava direktno slušanje. Koristi mikrofon na tipkovnici za diktiranje.");
       return;
     }
 
@@ -506,11 +541,21 @@ export function VoiceInboxApp() {
           <span className="flex h-20 w-20 items-center justify-center rounded-full bg-blue-700 text-white shadow-xl shadow-blue-700/25 ring-8 ring-white">
             <MicrophoneIcon className="h-10 w-10" />
           </span>
-          <span>{isListening ? "Slušam..." : "Dodirni mikrofon i govori"}</span>
-          <span className="text-sm font-medium text-blue-700">Hrvatski glasovni unos</span>
+          <span>
+            {prefersKeyboardDictation
+              ? "Diktiraj preko tipkovnice"
+              : isListening
+                ? "Slušam..."
+                : "Dodirni mikrofon i govori"}
+          </span>
+          <span className="text-sm font-medium text-blue-700">
+            {prefersKeyboardDictation ? "iPhone/Chrome iOS način" : "Hrvatski glasovni unos"}
+          </span>
         </button>
         <p className="mt-3 text-sm leading-6 text-slate-500">
-          Ako se na iPhoneu ne pojavi dozvola za mikrofon, dodirni polje ispod i koristi mikrofon na tipkovnici.
+          {prefersKeyboardDictation
+            ? "Dodirni polje ispod i koristi mikrofon na tipkovnici. Android Chrome obično podržava direktni mikrofon."
+            : "Ako browser ne podrži direktni mikrofon, dodirni polje ispod i koristi mikrofon na tipkovnici."}
         </p>
 
         <label className="mt-6 block">
@@ -957,7 +1002,7 @@ export function VoiceInboxApp() {
         <button
           aria-label="Otvori glasovni unos"
           className="fixed right-4 z-40 flex items-center gap-3 rounded-full bg-slate-950 py-2 pl-4 pr-2 text-sm font-semibold text-white shadow-2xl shadow-slate-950/30 ring-1 ring-white/40 transition active:scale-95"
-          onClick={() => setIsCaptureOpen(true)}
+          onClick={openCapture}
           style={{ bottom: "calc(1rem + env(safe-area-inset-bottom))" }}
           type="button"
         >
